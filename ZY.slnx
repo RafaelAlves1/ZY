@@ -5,4 +5,7 @@
     <Project Path="src/ZY.Desktop/ZY.Desktop.csproj" />
     <Project Path="src/ZY.Infrastructure/ZY.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ZY.Tests/ZY.Tests.csproj" />
+  </Folder>
 </Solution>
