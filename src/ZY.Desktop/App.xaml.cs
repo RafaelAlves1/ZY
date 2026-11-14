@@ -14,9 +14,13 @@ public partial class App : System.Windows.Application
 {
     public IConversationService ConversationService { get; private set; } = null!;
 
+    public IAssistantStateService AssistantStateService { get; private set; } = null!;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        AssistantStateService = new AssistantStateService();
 
         var httpClient = new System.Net.Http.HttpClient
         {

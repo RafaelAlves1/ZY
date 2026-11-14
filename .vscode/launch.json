@@ -1,0 +1,17 @@
+
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "ZY - Debug",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/ZY.Desktop/bin/Debug/net10.0-windows/ZY.Desktop.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/src/ZY.Desktop",
+            "stopAtEntry": false,
+            "console": "internalConsole"
+        }
+    ]
+}

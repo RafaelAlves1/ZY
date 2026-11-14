@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using ZY.Application.Interfaces;
+using ZY.Core.Enums;
 using ZY.Infrastructure.AI;
 
 namespace ZY.Desktop;
@@ -11,6 +12,7 @@ namespace ZY.Desktop;
 public partial class MainWindow : Window
 {
     private readonly IConversationService _conversationService;
+    private readonly IAssistantStateService _assistantStateService;
 
     public MainWindow()
     {
@@ -18,10 +20,23 @@ public partial class MainWindow : Window
 
         _conversationService =
             ((App)System.Windows.Application.Current).ConversationService;
+        _assistantStateService =
+((App)System.Windows.Application.Current).AssistantStateService;
 
         SendButton.Click += SendButton_Click;
 
         MessageInput.KeyDown += MessageInput_KeyDown;
+
+        _assistantStateService.StateChanged += AssistantStateService_StateChanged;
+    }
+
+    private void AssistantStateService_StateChanged(
+    ZY.Core.Events.AssistantStateChangedEvent stateChangedEvent
+)
+    {
+        System.Diagnostics.Debug.WriteLine(
+            $"ZY: {stateChangedEvent.PreviousState} -> {stateChangedEvent.CurrentState}"
+        );
     }
 
     private async void SendButton_Click(object sender, RoutedEventArgs e)
@@ -54,6 +69,8 @@ public partial class MainWindow : Window
 
         try
         {
+            _assistantStateService.SetState(AssistantState.Thinking);
+
             var response = await _conversationService.SendMessageAsync(message);
 
             AddMessage(response, false);
@@ -88,6 +105,8 @@ public partial class MainWindow : Window
         }
         finally
         {
+            _assistantStateService.SetState(AssistantState.Standby);
+
             SendButton.IsEnabled = true;
             MessageInput.Focus();
         }
