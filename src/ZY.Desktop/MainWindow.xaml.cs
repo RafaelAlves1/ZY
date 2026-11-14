@@ -19,6 +19,8 @@ public partial class MainWindow : Window
 
     private bool _thinkingAnimationRunning;
 
+    private Border? _thinkingIndicator;
+
     private static readonly Dictionary<AssistantState, Brush> StateColors = new()
     {
         [AssistantState.Standby] = new SolidColorBrush(Color.FromRgb(84, 217, 255)),
@@ -59,6 +61,18 @@ public partial class MainWindow : Window
         _assistantStateService.StateChanged += AssistantStateService_StateChanged;
 
         UpdateVisualState(_assistantStateService.CurrentState);
+        AddMessage(
+    "Olá! Estou pronto para conversar. Como posso ajudar?",
+    false
+);
+
+        MessageInput.TextChanged += (_, _) =>
+        {
+            MessagePlaceholder.Visibility =
+                string.IsNullOrEmpty(MessageInput.Text)
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+        };
     }
 
     // ATALHOS TEMPORÁRIOS PARA TESTAR OS ESTADOS
@@ -108,11 +122,18 @@ public partial class MainWindow : Window
 
         AssistantStateIndicator.Fill = StateColors[state];
 
+        AssistantStateIndicator.Effect = new DropShadowEffect
+        {
+            Color = ((SolidColorBrush)StateColors[state]).Color,
+            BlurRadius = 9,
+            ShadowDepth = 0,
+            Opacity = 0.8
+        };
+
         AssistantStateDescription.Text = StateDescriptions[state];
 
         UpdateBrainAnimation(state);
     }
-
     private void UpdateBrainAnimation(AssistantState state)
     {
         var thinkingAnimation =
@@ -237,6 +258,8 @@ public partial class MainWindow : Window
         }
     }
 
+    private bool _isProcessing;
+
     private void AnimateWaves(
         double minimum,
         double maximum,
@@ -326,23 +349,42 @@ public partial class MainWindow : Window
         }
     }
 
+
     private async Task SendMessageAsync()
     {
+        if (_isProcessing)
+            return;
+
         var message = MessageInput.Text.Trim();
 
         if (string.IsNullOrWhiteSpace(message))
             return;
 
+        _isProcessing = true;
+
         AddMessage(message, true);
 
         MessageInput.Clear();
+
         SendButton.IsEnabled = false;
+        MessageInput.IsEnabled = false;
 
         try
         {
             _assistantStateService.SetState(AssistantState.Thinking);
 
-            var response = await _conversationService.SendMessageAsync(message);
+            ShowThinkingIndicator();
+
+            string response;
+
+            try
+            {
+                response = await _conversationService.SendMessageAsync(message);
+            }
+            finally
+            {
+                HideThinkingIndicator();
+            }
 
             AddMessage(response, false);
         }
@@ -378,48 +420,90 @@ public partial class MainWindow : Window
         {
             _assistantStateService.SetState(AssistantState.Standby);
 
+            _isProcessing = false;
+
             SendButton.IsEnabled = true;
+            MessageInput.IsEnabled = true;
+
             MessageInput.Focus();
         }
     }
 
+
+
     private void AddMessage(string message, bool isUser)
     {
+        var accentColor = isUser
+            ? Color.FromRgb(139, 203, 255)
+            : Color.FromRgb(84, 217, 255);
+
+        var header = new TextBlock
+        {
+            Text = isUser ? "VOCÊ" : "ZY",
+            Foreground = new SolidColorBrush(accentColor),
+            FontSize = 9,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(0, 0, 0, 5)
+        };
+
         var messageBlock = new TextBlock
         {
             Text = message,
-            Foreground = Brushes.White,
+            Foreground = new SolidColorBrush(
+                Color.FromRgb(226, 232, 240)
+            ),
             TextWrapping = TextWrapping.Wrap,
-            FontSize = 14
+            FontSize = 13,
+            LineHeight = 19
+        };
+
+        var copyIcon = new TextBlock
+        {
+            Text = "\uE8C8",
+            FontFamily = new FontFamily("Segoe MDL2 Assets"),
+            FontSize = 13,
+            Foreground = new SolidColorBrush(accentColor),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
         };
 
         var copyButton = new Button
         {
-            Content = "Copiar",
-            FontSize = 11,
-            Padding = new Thickness(8, 4, 8, 4),
-            Margin = new Thickness(0, 10, 0, 0),
+            Content = copyIcon,
+            ToolTip = "Copiar mensagem",
+            Width = 27,
+            Height = 25,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 5, 0, -3),
             Background = Brushes.Transparent,
-            Foreground = new SolidColorBrush(
-                Color.FromRgb(84, 217, 255)
-            ),
             BorderThickness = new Thickness(0),
             Cursor = System.Windows.Input.Cursors.Hand,
-            HorizontalAlignment = HorizontalAlignment.Right
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Focusable = false
         };
+
+        copyButton.Template = CreateCopyButtonTemplate();
 
         copyButton.Click += (_, _) =>
         {
             try
             {
                 Clipboard.SetText(message);
-                copyButton.Content = "Copiado!";
+
+                copyIcon.Text = "\uE73E";
+                copyIcon.Foreground = new SolidColorBrush(
+                    Color.FromRgb(72, 223, 169)
+                );
+
+                copyButton.ToolTip = "Mensagem copiada";
 
                 Task.Delay(1500).ContinueWith(_ =>
                 {
                     Dispatcher.Invoke(() =>
                     {
-                        copyButton.Content = "Copiar";
+                        copyIcon.Text = "\uE8C8";
+                        copyIcon.Foreground = new SolidColorBrush(accentColor);
+                        copyButton.ToolTip = "Copiar mensagem";
                     });
                 });
             }
@@ -436,20 +520,26 @@ public partial class MainWindow : Window
 
         var messageContent = new StackPanel();
 
+        messageContent.Children.Add(header);
         messageContent.Children.Add(messageBlock);
         messageContent.Children.Add(copyButton);
 
         var messageContainer = new Border
         {
             Background = isUser
-                ? new SolidColorBrush(Color.FromRgb(18, 97, 138))
-                : new SolidColorBrush(Color.FromRgb(27, 44, 66)),
+                ? new SolidColorBrush(Color.FromRgb(18, 55, 82))
+                : new SolidColorBrush(Color.FromRgb(18, 38, 60)),
 
-            CornerRadius = new CornerRadius(10),
-            Padding = new Thickness(14),
-            Margin = new Thickness(0, 0, 0, 12),
-            MaxWidth = 600,
+            BorderBrush = isUser
+                ? new SolidColorBrush(Color.FromRgb(37, 91, 126))
+                : new SolidColorBrush(Color.FromRgb(27, 59, 89)),
 
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(11),
+            Padding = new Thickness(13, 10, 13, 8),
+            Margin = new Thickness(0, 0, 0, 10),
+            MinWidth = 120,
+            MaxWidth = 540,
             HorizontalAlignment = isUser
                 ? HorizontalAlignment.Right
                 : HorizontalAlignment.Left,
@@ -458,5 +548,188 @@ public partial class MainWindow : Window
         };
 
         MessagesPanel.Children.Add(messageContainer);
+
+        Dispatcher.BeginInvoke(
+            System.Windows.Threading.DispatcherPriority.Background,
+            new Action(() => MessagesScrollViewer.ScrollToEnd())
+        );
     }
+
+    private ControlTemplate CreateCopyButtonTemplate()
+    {
+        var template = new ControlTemplate(typeof(Button));
+
+        var border = new FrameworkElementFactory(typeof(Border));
+        border.Name = "ButtonBorder";
+
+        border.SetValue(
+            Border.BackgroundProperty,
+            Brushes.Transparent
+        );
+
+        border.SetValue(
+            Border.CornerRadiusProperty,
+            new CornerRadius(6)
+        );
+
+        border.SetValue(
+            Border.PaddingProperty,
+            new Thickness(3)
+        );
+
+        var presenter = new FrameworkElementFactory(
+            typeof(ContentPresenter)
+        );
+
+        presenter.SetValue(
+            ContentPresenter.HorizontalAlignmentProperty,
+            HorizontalAlignment.Center
+        );
+
+        presenter.SetValue(
+            ContentPresenter.VerticalAlignmentProperty,
+            VerticalAlignment.Center
+        );
+
+        border.AppendChild(presenter);
+        template.VisualTree = border;
+
+        var hoverTrigger = new Trigger
+        {
+            Property = Button.IsMouseOverProperty,
+            Value = true
+        };
+
+        hoverTrigger.Setters.Add(
+            new Setter(
+                Border.BackgroundProperty,
+                new SolidColorBrush(Color.FromRgb(27, 59, 89)),
+                "ButtonBorder"
+            )
+        );
+
+        template.Triggers.Add(hoverTrigger);
+
+        var pressedTrigger = new Trigger
+        {
+            Property = Button.IsPressedProperty,
+            Value = true
+        };
+
+        pressedTrigger.Setters.Add(
+            new Setter(
+                Border.BackgroundProperty,
+                new SolidColorBrush(Color.FromRgb(35, 80, 112)),
+                "ButtonBorder"
+            )
+        );
+
+        template.Triggers.Add(pressedTrigger);
+
+        return template;
+    }
+
+
+    private void ShowThinkingIndicator()
+    {
+        if (_thinkingIndicator != null)
+            return;
+
+        var header = new TextBlock
+        {
+            Text = "ZY",
+            Foreground = new SolidColorBrush(
+                Color.FromRgb(84, 217, 255)
+            ),
+            FontSize = 9,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(0, 0, 0, 5)
+        };
+
+        var message = new TextBlock
+        {
+            Text = "ZY está pensando",
+            Foreground = new SolidColorBrush(
+                Color.FromRgb(226, 232, 240)
+            ),
+            FontSize = 13,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        var dots = new TextBlock
+        {
+            Text = "...",
+            Foreground = new SolidColorBrush(
+                Color.FromRgb(84, 217, 255)
+            ),
+            FontSize = 16,
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(3, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        dots.BeginAnimation(
+            UIElement.OpacityProperty,
+            new System.Windows.Media.Animation.DoubleAnimation
+            {
+                From = 0.25,
+                To = 1,
+                Duration = TimeSpan.FromMilliseconds(650),
+                AutoReverse = true,
+                RepeatBehavior =
+                    System.Windows.Media.Animation.RepeatBehavior.Forever
+            }
+        );
+
+        var content = new StackPanel();
+
+        content.Children.Add(header);
+
+        var messageRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal
+        };
+
+        messageRow.Children.Add(message);
+        messageRow.Children.Add(dots);
+
+        content.Children.Add(messageRow);
+
+        _thinkingIndicator = new Border
+        {
+            Background = new SolidColorBrush(
+                Color.FromRgb(18, 38, 60)
+            ),
+            BorderBrush = new SolidColorBrush(
+                Color.FromRgb(27, 59, 89)
+            ),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(11),
+            Padding = new Thickness(13, 10, 13, 8),
+            Margin = new Thickness(0, 0, 0, 10),
+            MinWidth = 120,
+            MaxWidth = 540,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Child = content
+        };
+
+        MessagesPanel.Children.Add(_thinkingIndicator);
+
+        Dispatcher.BeginInvoke(
+            System.Windows.Threading.DispatcherPriority.Background,
+            new Action(() => MessagesScrollViewer.ScrollToEnd())
+        );
+    }
+
+    private void HideThinkingIndicator()
+    {
+        if (_thinkingIndicator == null)
+            return;
+
+        MessagesPanel.Children.Remove(_thinkingIndicator);
+        _thinkingIndicator = null;
+    }
+
+
+
 }

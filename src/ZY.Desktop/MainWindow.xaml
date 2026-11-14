@@ -898,41 +898,70 @@
                             CornerRadius="14"
                             Padding="18">
 
-                        <ScrollViewer VerticalScrollBarVisibility="Auto"
+
+                        <ScrollViewer x:Name="MessagesScrollViewer"
+                                      VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled">
 
+                            <ScrollViewer.Resources>
+                                <Style TargetType="{x:Type ScrollBar}">
+                                    <Setter Property="Width"
+                                            Value="8"/>
+                                    <Setter Property="Background"
+                                            Value="Transparent"/>
+                                    <Setter Property="Foreground"
+                                            Value="#315A78"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="{x:Type ScrollBar}">
+                                                <Grid Width="8"
+                                                      Background="Transparent">
+
+                                                    <Track x:Name="PART_Track"
+                                                           IsDirectionReversed="True">
+
+                                                        <Track.Thumb>
+                                                            <Thumb MinHeight="28"
+                                                                   Background="#315A78">
+                                                                <Thumb.Template>
+                                                                    <ControlTemplate TargetType="{x:Type Thumb}">
+                                                                        <Border x:Name="ThumbBorder"
+                                                                                Background="{TemplateBinding Background}"
+                                                                                CornerRadius="4"
+                                                                                Margin="1,2"/>
+                                                                        <ControlTemplate.Triggers>
+                                                                            <Trigger Property="IsMouseOver"
+                                                                                     Value="True">
+                                                                                <Setter TargetName="ThumbBorder"
+                                                                                        Property="Background"
+                                                                                        Value="#54D9FF"/>
+                                                                            </Trigger>
+                                                                            <Trigger Property="IsDragging"
+                                                                                     Value="True">
+                                                                                <Setter TargetName="ThumbBorder"
+                                                                                        Property="Background"
+                                                                                        Value="#109BCF"/>
+                                                                            </Trigger>
+                                                                        </ControlTemplate.Triggers>
+                                                                    </ControlTemplate>
+                                                                </Thumb.Template>
+                                                            </Thumb>
+                                                        </Track.Thumb>
+
+                                                    </Track>
+                                                </Grid>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ScrollViewer.Resources>
+
                             <StackPanel x:Name="MessagesPanel">
-
-                                <Border Background="#12263C"
-                                        BorderBrush="#1B3B59"
-                                        BorderThickness="1"
-                                        CornerRadius="12"
-                                        Padding="16"
-                                        HorizontalAlignment="Left"
-                                        MaxWidth="540">
-
-                                    <StackPanel>
-
-                                        <TextBlock Text="ZY"
-                                                   Foreground="#54D9FF"
-                                                   FontSize="10"
-                                                   FontWeight="Bold"
-                                                   Margin="0,0,0,8"/>
-
-                                        <TextBlock
-                                            Text="Olá! Estou pronto para conversar. Como posso ajudar?"
-                                            Foreground="#E2E8F0"
-                                            TextWrapping="Wrap"
-                                            FontSize="14"
-                                            LineHeight="22"/>
-
-                                    </StackPanel>
-
-                                </Border>
-
+                                <!-- Preserve aqui o conteúdo inicial atual do ZY -->
                             </StackPanel>
 
                         </ScrollViewer>
+
                     </Border>
 
                     <!-- ENVIO -->
@@ -951,14 +980,25 @@
                                 CornerRadius="11"
                                 Height="52">
 
-                            <TextBox x:Name="MessageInput"
-                                     Background="Transparent"
-                                     Foreground="#FFFFFF"
-                                     BorderThickness="0"
-                                     Padding="15,0"
-                                     FontSize="14"
-                                     VerticalContentAlignment="Center"
-                                     CaretBrush="#54D9FF"/>
+                            <Grid>
+                                <TextBox x:Name="MessageInput"
+                                         Background="Transparent"
+                                         Foreground="#FFFFFF"
+                                         BorderThickness="0"
+                                         Padding="15,0"
+                                         FontSize="14"
+                                         VerticalContentAlignment="Center"
+                                         CaretBrush="#54D9FF"/>
+
+                                <TextBlock x:Name="MessagePlaceholder"
+                                           Text="Digite sua mensagem para o ZY..."
+                                           Foreground="#607B99"
+                                           FontSize="13"
+                                           Margin="15,0,0,0"
+                                           VerticalAlignment="Center"
+                                           IsHitTestVisible="False"
+                                           Visibility="Visible"/>
+                            </Grid>
 
                         </Border>
 
