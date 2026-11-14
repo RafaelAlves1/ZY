@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ZY.Application/ZY.Application.csproj" />
+    <Project Path="src/ZY.Core/ZY.Core.csproj" />
+    <Project Path="src/ZY.Desktop/ZY.Desktop.csproj" />
+    <Project Path="src/ZY.Infrastructure/ZY.Infrastructure.csproj" />
+  </Folder>
+</Solution>

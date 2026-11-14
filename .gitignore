@@ -1,0 +1,38 @@
+# .NET build
+[Bb]in/
+[Oo]bj/
+
+# IDE
+.vs/
+.idea/
+
+# VS Code - configurações pessoais
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+# User-specific files
+*.user
+*.suo
+
+# NuGet
+*.nupkg
+.nuget/
+
+# Logs
+*.log
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Local databases
+*.db
+*.db-shm
+*.db-wal
+
+# Temporary files
+[Tt]emp/
+[Tt]mp/
