@@ -53,7 +53,27 @@ public sealed class OllamaAiService : IAiService
             cancellationToken
         );
 
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorContent = await response.Content.ReadAsStringAsync(
+                cancellationToken
+            );
+
+            if (
+                response.StatusCode == System.Net.HttpStatusCode.NotFound
+                && errorContent.Contains(
+                    "model",
+                    StringComparison.OrdinalIgnoreCase
+                )
+            )
+            {
+                throw new OllamaModelNotFoundException(
+                    $"O modelo '{ModelName}' não está disponível no Ollama."
+                );
+            }
+
+            response.EnsureSuccessStatusCode();
+        }
 
         using var jsonDocument = await JsonDocument.ParseAsync(
             await response.Content.ReadAsStreamAsync(cancellationToken),

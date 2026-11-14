@@ -1,8 +1,10 @@
 ﻿
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using ZY.Application.Interfaces;
+using ZY.Infrastructure.AI;
 
 namespace ZY.Desktop;
 
@@ -56,10 +58,31 @@ public partial class MainWindow : Window
 
             AddMessage(response, false);
         }
-        catch (Exception ex)
+        catch (OllamaModelNotFoundException)
         {
             AddMessage(
-                $"Não foi possível obter uma resposta: {ex.Message}",
+                "O modelo de inteligência artificial não está disponível. Verifique se ele está instalado no Ollama.",
+                false
+            );
+        }
+        catch (HttpRequestException)
+        {
+            AddMessage(
+                "Não consegui me conectar ao serviço de IA. Verifique se o Ollama está iniciado.",
+                false
+            );
+        }
+        catch (TaskCanceledException)
+        {
+            AddMessage(
+                "A solicitação demorou mais do que o esperado. Tente novamente.",
+                false
+            );
+        }
+        catch (Exception)
+        {
+            AddMessage(
+                "Ocorreu um erro inesperado ao processar sua mensagem.",
                 false
             );
         }
