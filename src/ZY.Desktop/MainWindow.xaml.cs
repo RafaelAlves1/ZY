@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using ZY.Application.Interfaces;
 using ZY.Core.Enums;
 using ZY.Infrastructure.AI;
@@ -14,29 +15,105 @@ public partial class MainWindow : Window
     private readonly IConversationService _conversationService;
     private readonly IAssistantStateService _assistantStateService;
 
+    private Storyboard? _thinkingAnimation;
+    private bool _thinkingAnimationRunning;
+
+    private static readonly Dictionary<AssistantState, Brush> StateColors = new()
+    {
+        [AssistantState.Standby] = new SolidColorBrush(Color.FromRgb(84, 217, 255)),
+        [AssistantState.Thinking] = new SolidColorBrush(Color.FromRgb(45, 145, 255)),
+        [AssistantState.Listening] = new SolidColorBrush(Color.FromRgb(0, 229, 255)),
+        [AssistantState.Speaking] = new SolidColorBrush(Color.FromRgb(75, 190, 255)),
+        [AssistantState.Executing] = new SolidColorBrush(Color.FromRgb(105, 135, 255)),
+        [AssistantState.Error] = new SolidColorBrush(Color.FromRgb(255, 90, 105)),
+        [AssistantState.GameMode] = new SolidColorBrush(Color.FromRgb(150, 120, 255))
+    };
+
     public MainWindow()
     {
         InitializeComponent();
 
         _conversationService =
             ((App)System.Windows.Application.Current).ConversationService;
+
         _assistantStateService =
-((App)System.Windows.Application.Current).AssistantStateService;
+            ((App)System.Windows.Application.Current).AssistantStateService;
+
+        Loaded += MainWindow_Loaded;
+        Closed += MainWindow_Closed;
 
         SendButton.Click += SendButton_Click;
-
         MessageInput.KeyDown += MessageInput_KeyDown;
 
         _assistantStateService.StateChanged += AssistantStateService_StateChanged;
     }
 
-    private void AssistantStateService_StateChanged(
-    ZY.Core.Events.AssistantStateChangedEvent stateChangedEvent
-)
+    private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        _thinkingAnimation =
+            (Storyboard)FindResource("ThinkingAuraAnimation");
+    }
+
+    private void MainWindow_Closed(object? sender, EventArgs e)
+    {
+        _assistantStateService.StateChanged -= AssistantStateService_StateChanged;
+
+        StopBrainAnimation();
+    }
+
+    private void AssistantStateService_StateChanged(
+        ZY.Core.Events.AssistantStateChangedEvent stateChangedEvent)
+    {
+        Dispatcher.Invoke(() =>
+        {
+            var currentState = stateChangedEvent.CurrentState;
+
+            AssistantStateText.Text =
+                currentState.ToString().ToUpperInvariant();
+
+            AssistantStateText.Foreground = StateColors[currentState];
+
+            UpdateBrainAnimation(currentState);
+        });
+
         System.Diagnostics.Debug.WriteLine(
             $"ZY: {stateChangedEvent.PreviousState} -> {stateChangedEvent.CurrentState}"
         );
+    }
+
+    private void UpdateBrainAnimation(AssistantState state)
+    {
+        if (state == AssistantState.Thinking)
+        {
+            StartBrainAnimation();
+        }
+        else
+        {
+            StopBrainAnimation();
+        }
+    }
+
+    private void StartBrainAnimation()
+    {
+        if (_thinkingAnimationRunning || _thinkingAnimation is null)
+            return;
+
+        _thinkingAnimation.Begin(
+            this,
+            HandoffBehavior.SnapshotAndReplace,
+            true
+        );
+
+        _thinkingAnimationRunning = true;
+    }
+
+    private void StopBrainAnimation()
+    {
+        if (!_thinkingAnimationRunning || _thinkingAnimation is null)
+            return;
+
+        _thinkingAnimation.Stop(this);
+        _thinkingAnimationRunning = false;
     }
 
     private async void SendButton_Click(object sender, RoutedEventArgs e)
@@ -112,7 +189,6 @@ public partial class MainWindow : Window
         }
     }
 
-
     private void AddMessage(string message, bool isUser)
     {
         var messageBlock = new TextBlock
@@ -187,5 +263,4 @@ public partial class MainWindow : Window
 
         MessagesPanel.Children.Add(messageContainer);
     }
-
 }
