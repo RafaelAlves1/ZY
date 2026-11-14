@@ -4,6 +4,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
+using System.Windows.Shapes;
 using ZY.Application.Interfaces;
 using ZY.Core.Enums;
 using ZY.Infrastructure.AI;
@@ -15,7 +17,6 @@ public partial class MainWindow : Window
     private readonly IConversationService _conversationService;
     private readonly IAssistantStateService _assistantStateService;
 
-    private Storyboard? _thinkingAnimation;
     private bool _thinkingAnimationRunning;
 
     private static readonly Dictionary<AssistantState, Brush> StateColors = new()
@@ -29,6 +30,17 @@ public partial class MainWindow : Window
         [AssistantState.GameMode] = new SolidColorBrush(Color.FromRgb(150, 120, 255))
     };
 
+    private static readonly Dictionary<AssistantState, string> StateDescriptions = new()
+    {
+        [AssistantState.Standby] = "AGUARDANDO INTERAÇÃO",
+        [AssistantState.Listening] = "OUVINDO VOCÊ",
+        [AssistantState.Thinking] = "PROCESSANDO INFORMAÇÕES",
+        [AssistantState.Speaking] = "RESPONDENDO",
+        [AssistantState.Executing] = "EXECUTANDO TAREFA",
+        [AssistantState.Error] = "OCORREU UM ERRO",
+        [AssistantState.GameMode] = "MODO DE JOGO ATIVO"
+    };
+
     public MainWindow()
     {
         InitializeComponent();
@@ -39,41 +51,49 @@ public partial class MainWindow : Window
         _assistantStateService =
             ((App)System.Windows.Application.Current).AssistantStateService;
 
-        Loaded += MainWindow_Loaded;
-        Closed += MainWindow_Closed;
-
         SendButton.Click += SendButton_Click;
         MessageInput.KeyDown += MessageInput_KeyDown;
 
+        PreviewKeyDown += MainWindow_PreviewKeyDown;
+
         _assistantStateService.StateChanged += AssistantStateService_StateChanged;
+
+        UpdateVisualState(_assistantStateService.CurrentState);
     }
 
-    private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    // ATALHOS TEMPORÁRIOS PARA TESTAR OS ESTADOS
+    private void MainWindow_PreviewKeyDown(
+        object sender,
+        System.Windows.Input.KeyEventArgs e
+    )
     {
-        _thinkingAnimation =
-            (Storyboard)FindResource("ThinkingAuraAnimation");
-    }
+        var testState = e.Key switch
+        {
+            System.Windows.Input.Key.F1 => AssistantState.Standby,
+            System.Windows.Input.Key.F2 => AssistantState.Listening,
+            System.Windows.Input.Key.F3 => AssistantState.Thinking,
+            System.Windows.Input.Key.F4 => AssistantState.Speaking,
+            System.Windows.Input.Key.F5 => AssistantState.Executing,
+            System.Windows.Input.Key.F6 => AssistantState.Error,
+            System.Windows.Input.Key.F7 => AssistantState.GameMode,
+            _ => (AssistantState?)null
+        };
 
-    private void MainWindow_Closed(object? sender, EventArgs e)
-    {
-        _assistantStateService.StateChanged -= AssistantStateService_StateChanged;
+        if (testState is null)
+            return;
 
-        StopBrainAnimation();
+        e.Handled = true;
+
+        _assistantStateService.SetState(testState.Value);
     }
 
     private void AssistantStateService_StateChanged(
-        ZY.Core.Events.AssistantStateChangedEvent stateChangedEvent)
+        ZY.Core.Events.AssistantStateChangedEvent stateChangedEvent
+    )
     {
         Dispatcher.Invoke(() =>
         {
-            var currentState = stateChangedEvent.CurrentState;
-
-            AssistantStateText.Text =
-                currentState.ToString().ToUpperInvariant();
-
-            AssistantStateText.Foreground = StateColors[currentState];
-
-            UpdateBrainAnimation(currentState);
+            UpdateVisualState(stateChangedEvent.CurrentState);
         });
 
         System.Diagnostics.Debug.WriteLine(
@@ -81,39 +101,212 @@ public partial class MainWindow : Window
         );
     }
 
+    private void UpdateVisualState(AssistantState state)
+    {
+        AssistantStateText.Text = state.ToString().ToUpperInvariant();
+        AssistantStateText.Foreground = StateColors[state];
+
+        AssistantStateIndicator.Fill = StateColors[state];
+
+        AssistantStateDescription.Text = StateDescriptions[state];
+
+        UpdateBrainAnimation(state);
+    }
+
     private void UpdateBrainAnimation(AssistantState state)
     {
-        if (state == AssistantState.Thinking)
+        var thinkingAnimation =
+            (Storyboard)FindResource("ThinkingAuraAnimation");
+
+        if (_thinkingAnimationRunning)
         {
-            StartBrainAnimation();
+            thinkingAnimation.Stop(this);
+            _thinkingAnimationRunning = false;
         }
-        else
+
+        ResetAuraAppearance();
+        ResetWaveAnimations();
+
+        switch (state)
         {
-            StopBrainAnimation();
+            case AssistantState.Standby:
+                SetStaticWaves(0.20, Color.FromRgb(39, 141, 203));
+                break;
+
+            case AssistantState.Listening:
+                AnimateWaves(
+                     0.15,
+        0.85,
+        0.38,
+                    Color.FromRgb(0, 229, 255)
+                );
+                break;
+
+            case AssistantState.Thinking:
+                thinkingAnimation.Begin(this, true);
+                _thinkingAnimationRunning = true;
+                break;
+
+            case AssistantState.Speaking:
+                AnimateWaves(
+                    0.20,
+                    1.00,
+                    0.42,
+                    Color.FromRgb(75, 190, 255)
+                );
+                break;
+
+            case AssistantState.Executing:
+                AnimateSequentialWaves();
+                break;
+
+            case AssistantState.Error:
+                AnimateWaves(
+        0.20,
+        0.80,
+        0.30,
+        Color.FromRgb(255, 90, 105)
+    );
+                break;
+
+            case AssistantState.GameMode:
+                SetStaticWaves(0.12, Color.FromRgb(92, 112, 145));
+                break;
         }
     }
 
-    private void StartBrainAnimation()
+    private void ResetAuraAppearance()
     {
-        if (_thinkingAnimationRunning || _thinkingAnimation is null)
-            return;
+        BrainAura.BeginAnimation(UIElement.OpacityProperty, null);
 
-        _thinkingAnimation.Begin(
-            this,
-            HandoffBehavior.SnapshotAndReplace,
-            true
-        );
+        BrainAura.RenderTransform.BeginAnimation(
+            ScaleTransform.ScaleXProperty, null);
 
-        _thinkingAnimationRunning = true;
+        BrainAura.RenderTransform.BeginAnimation(
+            ScaleTransform.ScaleYProperty, null);
+
+        BrainAuraInner.BeginAnimation(UIElement.OpacityProperty, null);
+
+        BrainAuraInner.RenderTransform.BeginAnimation(
+            ScaleTransform.ScaleXProperty, null);
+
+        BrainAuraInner.RenderTransform.BeginAnimation(
+            ScaleTransform.ScaleYProperty, null);
+
+        BrainAura.Opacity = 0.12;
+        BrainAuraInner.Opacity = 0.15;
+
+        if (BrainAura.Effect is BlurEffect outerBlur)
+            outerBlur.Radius = 38;
+
+        if (BrainAuraInner.Effect is BlurEffect innerBlur)
+            innerBlur.Radius = 30;
     }
 
-    private void StopBrainAnimation()
+    private void ResetWaveAnimations()
     {
-        if (!_thinkingAnimationRunning || _thinkingAnimation is null)
-            return;
+        foreach (var bar in GetWaveBars())
+        {
+            if (bar.RenderTransform is not ScaleTransform scale)
+                continue;
 
-        _thinkingAnimation.Stop(this);
-        _thinkingAnimationRunning = false;
+            scale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+            scale.ScaleY = 0.25;
+        }
+    }
+
+    private Border[] GetWaveBars()
+    {
+        return
+        [
+            WaveBar01, WaveBar02, WaveBar03, WaveBar04, WaveBar05,
+            WaveBar06, WaveBar07, WaveBar08, WaveBar09, WaveBar10,
+            WaveBar11, WaveBar12, WaveBar13, WaveBar14, WaveBar15
+        ];
+    }
+
+    private void SetStaticWaves(double scale, Color color)
+    {
+        foreach (var bar in GetWaveBars())
+        {
+            if (bar.RenderTransform is not ScaleTransform transform)
+                continue;
+
+            transform.ScaleY = scale;
+            bar.Background = new SolidColorBrush(color);
+        }
+    }
+
+    private void AnimateWaves(
+        double minimum,
+        double maximum,
+        double duration,
+        Color color
+    )
+    {
+        var bars = GetWaveBars();
+
+        for (var i = 0; i < bars.Length; i++)
+        {
+            var bar = bars[i];
+
+            if (bar.RenderTransform is not ScaleTransform transform)
+                continue;
+
+            bar.Background = new SolidColorBrush(color);
+
+            var variation = (i % 5) * 0.08;
+
+            var animation = new DoubleAnimation
+            {
+                From = minimum,
+                To = Math.Min(maximum, maximum - variation),
+                Duration = TimeSpan.FromSeconds(
+                    duration + ((i % 4) * 0.09)
+                ),
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever
+            };
+
+            transform.BeginAnimation(
+                ScaleTransform.ScaleYProperty,
+                animation,
+                HandoffBehavior.SnapshotAndReplace
+            );
+        }
+    }
+
+    private void AnimateSequentialWaves()
+    {
+        var bars = GetWaveBars();
+
+        for (var i = 0; i < bars.Length; i++)
+        {
+            var bar = bars[i];
+
+            if (bar.RenderTransform is not ScaleTransform transform)
+                continue;
+
+            bar.Background = new SolidColorBrush(
+                Color.FromRgb(105, 135, 255)
+            );
+
+            var animation = new DoubleAnimation
+            {
+                From = 0.15,
+                To = 0.95,
+                Duration = TimeSpan.FromSeconds(0.38),
+                BeginTime = TimeSpan.FromMilliseconds(i * 65),
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever
+            };
+
+            transform.BeginAnimation(
+                ScaleTransform.ScaleYProperty,
+                animation,
+                HandoffBehavior.SnapshotAndReplace
+            );
+        }
     }
 
     private async void SendButton_Click(object sender, RoutedEventArgs e)
@@ -123,7 +316,8 @@ public partial class MainWindow : Window
 
     private async void MessageInput_KeyDown(
         object sender,
-        System.Windows.Input.KeyEventArgs e)
+        System.Windows.Input.KeyEventArgs e
+    )
     {
         if (e.Key == System.Windows.Input.Key.Enter)
         {
@@ -206,7 +400,9 @@ public partial class MainWindow : Window
             Padding = new Thickness(8, 4, 8, 4),
             Margin = new Thickness(0, 10, 0, 0),
             Background = Brushes.Transparent,
-            Foreground = new SolidColorBrush(Color.FromRgb(84, 217, 255)),
+            Foreground = new SolidColorBrush(
+                Color.FromRgb(84, 217, 255)
+            ),
             BorderThickness = new Thickness(0),
             Cursor = System.Windows.Input.Cursors.Hand,
             HorizontalAlignment = HorizontalAlignment.Right
