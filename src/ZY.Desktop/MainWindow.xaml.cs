@@ -8,6 +8,7 @@ using System.Windows.Media.Effects;
 using System.Windows.Shapes;
 using ZY.Application.Interfaces;
 using ZY.Core.Enums;
+using ZY.Desktop.Views;
 using ZY.Infrastructure.AI;
 
 namespace ZY.Desktop;
@@ -54,6 +55,7 @@ public partial class MainWindow : Window
             ((App)System.Windows.Application.Current).AssistantStateService;
 
         SendButton.Click += SendButton_Click;
+        ClearConversationButton.Click += ClearConversation;
         MessageInput.KeyDown += MessageInput_KeyDown;
 
         PreviewKeyDown += MainWindow_PreviewKeyDown;
@@ -730,6 +732,31 @@ public partial class MainWindow : Window
         _thinkingIndicator = null;
     }
 
+
+    private void ClearConversation(object? sender, RoutedEventArgs e)
+    {
+        if (_isProcessing)
+            return;
+
+        var confirmationWindow = new ConfirmationWindow
+        {
+            Owner = this
+        };
+
+        var result = confirmationWindow.ShowDialog();
+
+        if (result != true)
+            return;
+
+        _conversationService.ClearHistory();
+
+        MessagesPanel.Children.Clear();
+
+        AddMessage(
+            "Olá! Estou pronto para conversar. Como posso ajudar?",
+            false
+        );
+    }
 
 
 }
