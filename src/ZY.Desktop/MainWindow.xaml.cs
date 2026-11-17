@@ -20,8 +20,8 @@ public partial class MainWindow : Window
     private readonly IAssistantStateService _assistantStateService;
 
     private bool _thinkingAnimationRunning;
-
     private Border? _thinkingIndicator;
+    private bool _isProcessing;
 
     private static readonly Dictionary<AssistantState, Brush> StateColors = new()
     {
@@ -114,7 +114,6 @@ public partial class MainWindow : Window
             return;
 
         e.Handled = true;
-
         _assistantStateService.SetState(testState.Value);
     }
 
@@ -151,6 +150,7 @@ public partial class MainWindow : Window
 
         UpdateBrainAnimation(state);
     }
+
     private void UpdateBrainAnimation(AssistantState state)
     {
         var thinkingAnimation =
@@ -173,9 +173,9 @@ public partial class MainWindow : Window
 
             case AssistantState.Listening:
                 AnimateWaves(
-                     0.15,
-        0.85,
-        0.38,
+                    0.15,
+                    0.85,
+                    0.38,
                     Color.FromRgb(0, 229, 255)
                 );
                 break;
@@ -200,11 +200,11 @@ public partial class MainWindow : Window
 
             case AssistantState.Error:
                 AnimateWaves(
-        0.20,
-        0.80,
-        0.30,
-        Color.FromRgb(255, 90, 105)
-    );
+                    0.20,
+                    0.80,
+                    0.30,
+                    Color.FromRgb(255, 90, 105)
+                );
                 break;
 
             case AssistantState.GameMode:
@@ -274,8 +274,6 @@ public partial class MainWindow : Window
             bar.Background = new SolidColorBrush(color);
         }
     }
-
-    private bool _isProcessing;
 
     private void AnimateWaves(
         double minimum,
@@ -366,7 +364,6 @@ public partial class MainWindow : Window
         }
     }
 
-
     private async Task SendMessageAsync()
     {
         if (_isProcessing)
@@ -446,18 +443,17 @@ public partial class MainWindow : Window
         }
     }
 
-
-
     private void AddMessage(string message, bool isUser)
     {
-        var accentColor = isUser
-            ? Color.FromRgb(139, 203, 255)
-            : Color.FromRgb(84, 217, 255);
+        // Identificação neutra para combinar com a paleta grafite.
+        var labelColor = isUser
+            ? Color.FromRgb(190, 190, 190)
+            : Color.FromRgb(234, 234, 234);
 
         var header = new TextBlock
         {
             Text = isUser ? "VOCÊ" : "ZY",
-            Foreground = new SolidColorBrush(accentColor),
+            Foreground = new SolidColorBrush(labelColor),
             FontSize = 9,
             FontWeight = FontWeights.Bold,
             Margin = new Thickness(0, 0, 0, 5)
@@ -466,9 +462,7 @@ public partial class MainWindow : Window
         var messageBlock = new TextBlock
         {
             Text = message,
-            Foreground = new SolidColorBrush(
-                Color.FromRgb(226, 232, 240)
-            ),
+            Foreground = new SolidColorBrush(Color.FromRgb(226, 226, 226)),
             TextWrapping = TextWrapping.Wrap,
             FontSize = 13,
             LineHeight = 19
@@ -479,7 +473,7 @@ public partial class MainWindow : Window
             Text = "\uE8C8",
             FontFamily = new FontFamily("Segoe MDL2 Assets"),
             FontSize = 13,
-            Foreground = new SolidColorBrush(accentColor),
+            Foreground = new SolidColorBrush(Color.FromRgb(170, 170, 170)),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
@@ -519,7 +513,9 @@ public partial class MainWindow : Window
                     Dispatcher.Invoke(() =>
                     {
                         copyIcon.Text = "\uE8C8";
-                        copyIcon.Foreground = new SolidColorBrush(accentColor);
+                        copyIcon.Foreground = new SolidColorBrush(
+                            Color.FromRgb(170, 170, 170)
+                        );
                         copyButton.ToolTip = "Copiar mensagem";
                     });
                 });
@@ -543,13 +539,13 @@ public partial class MainWindow : Window
 
         var messageContainer = new Border
         {
-            Background = isUser
-                ? new SolidColorBrush(Color.FromRgb(18, 55, 82))
-                : new SolidColorBrush(Color.FromRgb(18, 38, 60)),
+            Background = new SolidColorBrush(
+                isUser
+                    ? Color.FromRgb(48, 48, 48)
+                    : Color.FromRgb(37, 37, 37)
+            ),
 
-            BorderBrush = isUser
-                ? new SolidColorBrush(Color.FromRgb(37, 91, 126))
-                : new SolidColorBrush(Color.FromRgb(27, 59, 89)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(65, 65, 65)),
 
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(11),
@@ -620,7 +616,7 @@ public partial class MainWindow : Window
         hoverTrigger.Setters.Add(
             new Setter(
                 Border.BackgroundProperty,
-                new SolidColorBrush(Color.FromRgb(27, 59, 89)),
+                new SolidColorBrush(Color.FromRgb(54, 54, 54)),
                 "ButtonBorder"
             )
         );
@@ -636,7 +632,7 @@ public partial class MainWindow : Window
         pressedTrigger.Setters.Add(
             new Setter(
                 Border.BackgroundProperty,
-                new SolidColorBrush(Color.FromRgb(35, 80, 112)),
+                new SolidColorBrush(Color.FromRgb(68, 68, 68)),
                 "ButtonBorder"
             )
         );
@@ -645,7 +641,6 @@ public partial class MainWindow : Window
 
         return template;
     }
-
 
     private void ShowThinkingIndicator()
     {
@@ -656,7 +651,7 @@ public partial class MainWindow : Window
         {
             Text = "ZY",
             Foreground = new SolidColorBrush(
-                Color.FromRgb(84, 217, 255)
+                Color.FromRgb(234, 234, 234)
             ),
             FontSize = 9,
             FontWeight = FontWeights.Bold,
@@ -667,7 +662,7 @@ public partial class MainWindow : Window
         {
             Text = "ZY está pensando",
             Foreground = new SolidColorBrush(
-                Color.FromRgb(226, 232, 240)
+                Color.FromRgb(226, 226, 226)
             ),
             FontSize = 13,
             VerticalAlignment = VerticalAlignment.Center
@@ -677,7 +672,7 @@ public partial class MainWindow : Window
         {
             Text = "...",
             Foreground = new SolidColorBrush(
-                Color.FromRgb(84, 217, 255)
+                Color.FromRgb(190, 190, 190)
             ),
             FontSize = 16,
             FontWeight = FontWeights.Bold,
@@ -687,14 +682,13 @@ public partial class MainWindow : Window
 
         dots.BeginAnimation(
             UIElement.OpacityProperty,
-            new System.Windows.Media.Animation.DoubleAnimation
+            new DoubleAnimation
             {
                 From = 0.25,
                 To = 1,
                 Duration = TimeSpan.FromMilliseconds(650),
                 AutoReverse = true,
-                RepeatBehavior =
-                    System.Windows.Media.Animation.RepeatBehavior.Forever
+                RepeatBehavior = RepeatBehavior.Forever
             }
         );
 
@@ -715,10 +709,10 @@ public partial class MainWindow : Window
         _thinkingIndicator = new Border
         {
             Background = new SolidColorBrush(
-                Color.FromRgb(18, 38, 60)
+                Color.FromRgb(37, 37, 37)
             ),
             BorderBrush = new SolidColorBrush(
-                Color.FromRgb(27, 59, 89)
+                Color.FromRgb(65, 65, 65)
             ),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(11),
@@ -746,8 +740,6 @@ public partial class MainWindow : Window
         MessagesPanel.Children.Remove(_thinkingIndicator);
         _thinkingIndicator = null;
     }
-
-
 
     private async void ClearConversation(object? sender, RoutedEventArgs e)
     {
@@ -785,7 +777,4 @@ public partial class MainWindow : Window
             );
         }
     }
-
-
-
 }
