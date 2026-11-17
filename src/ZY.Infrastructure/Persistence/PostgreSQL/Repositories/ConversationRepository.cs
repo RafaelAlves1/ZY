@@ -26,6 +26,15 @@ public sealed class ConversationRepository : IConversationRepository
             );
     }
 
+    public async Task<IReadOnlyList<Conversation>> GetAllAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.Conversations
+            .AsNoTracking()
+            .OrderByDescending(conversation => conversation.UpdatedAt)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<Conversation?> GetMostRecentAsync(
         CancellationToken cancellationToken = default)
     {
@@ -70,7 +79,6 @@ public sealed class ConversationRepository : IConversationRepository
         return messages;
     }
 
-
     public async Task AddMessageAsync(
         ChatMessage message,
         CancellationToken cancellationToken = default)
@@ -82,9 +90,11 @@ public sealed class ConversationRepository : IConversationRepository
             );
 
         if (conversation is null)
+        {
             throw new InvalidOperationException(
                 "A conversa associada à mensagem não foi encontrada."
             );
+        }
 
         conversation.UpdateActivity();
 
@@ -92,7 +102,6 @@ public sealed class ConversationRepository : IConversationRepository
 
         await _context.SaveChangesAsync(cancellationToken);
     }
-
 
     public async Task ClearMessagesAsync(
         Guid conversationId,
@@ -126,8 +135,9 @@ public sealed class ConversationRepository : IConversationRepository
     }
 
     public async Task AddMessagesAsync(
-    IReadOnlyList<ChatMessage> messages,
-    CancellationToken cancellationToken = default)
+        IReadOnlyList<ChatMessage> messages,
+        CancellationToken cancellationToken = default,
+        string? conversationTitle = null)
     {
         if (messages.Count == 0)
             return;
@@ -144,28 +154,53 @@ public sealed class ConversationRepository : IConversationRepository
         await using var transaction =
             await _context.Database.BeginTransactionAsync(cancellationToken);
 
-        var conversation = await _context.Conversations
-            .FirstOrDefaultAsync(
-                item => item.Id == conversationId,
+        Conversation? conversation = null;
+
+        try
+        {
+            conversation = await _context.Conversations
+                .FirstOrDefaultAsync(
+                    item => item.Id == conversationId,
+                    cancellationToken
+                );
+
+            if (conversation is null)
+            {
+                throw new InvalidOperationException(
+                    "A conversa associada às mensagens não foi encontrada."
+                );
+            }
+
+            conversation.UpdateActivity();
+
+            if (!string.IsNullOrWhiteSpace(conversationTitle))
+                conversation.UpdateTitle(conversationTitle);
+
+            await _context.Messages.AddRangeAsync(
+                messages,
                 cancellationToken
             );
 
-        if (conversation is null)
-        {
-            throw new InvalidOperationException(
-                "A conversa associada às mensagens não foi encontrada."
-            );
+            await _context.SaveChangesAsync(cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
         }
+        catch
+        {
+            await transaction.RollbackAsync(CancellationToken.None);
 
-        conversation.UpdateActivity();
+            if (conversation is not null)
+            {
+                await _context.Entry(conversation)
+                    .ReloadAsync(CancellationToken.None);
+            }
 
-        await _context.Messages.AddRangeAsync(
-            messages,
-            cancellationToken
-        );
+            foreach (var message in messages)
+            {
+                _context.Entry(message).State = EntityState.Detached;
+            }
 
-        await _context.SaveChangesAsync(cancellationToken);
-
-        await transaction.CommitAsync(cancellationToken);
+            throw;
+        }
     }
 }

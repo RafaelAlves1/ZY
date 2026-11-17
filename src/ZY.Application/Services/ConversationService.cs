@@ -16,6 +16,8 @@ public sealed class ConversationService : IConversationService
 
     public IReadOnlyList<ChatMessage> History => _history.AsReadOnly();
 
+    public Guid? ActiveConversationId => _activeConversation?.Id;
+
     public ConversationService(
         IAiService aiService,
         IConversationRepository conversationRepository)
@@ -77,10 +79,18 @@ public sealed class ConversationService : IConversationService
             response
         );
 
+        var conversationTitle = _activeConversation.Title == "Nova conversa"
+    ? GenerateConversationTitle(message)
+    : null;
+
         await _conversationRepository.AddMessagesAsync(
             [userMessage, assistantMessage],
-            cancellationToken
+            cancellationToken,
+            conversationTitle
         );
+
+        if (conversationTitle is not null)
+            _activeConversation.UpdateTitle(conversationTitle);
 
         _history.Add(userMessage);
         _history.Add(assistantMessage);
@@ -130,4 +140,68 @@ public sealed class ConversationService : IConversationService
             history.RemoveRange(0, messagesToRemove);
         }
     }
+
+    public async Task<IReadOnlyList<Conversation>> GetConversationsAsync(
+    CancellationToken cancellationToken = default)
+    {
+        return await _conversationRepository.GetAllAsync(cancellationToken);
+    }
+
+    public async Task CreateConversationAsync(
+        CancellationToken cancellationToken = default)
+    {
+        _activeConversation = await _conversationRepository.CreateAsync(
+            cancellationToken
+        );
+
+        _history.Clear();
+    }
+
+    public async Task SelectConversationAsync(
+    Guid conversationId,
+    CancellationToken cancellationToken = default)
+    {
+        var conversation = await _conversationRepository.GetByIdAsync(
+            conversationId,
+            cancellationToken
+        );
+
+        if (conversation is null)
+            throw new InvalidOperationException(
+                "A conversa selecionada não foi encontrada."
+            );
+
+        _activeConversation = conversation;
+
+        await LoadHistoryAsync(cancellationToken);
+    }
+
+
+
+    private static string GenerateConversationTitle(string message)
+    {
+        var normalizedMessage = string.Join(
+            " ",
+            message.Split(
+                (char[]?)null,
+                StringSplitOptions.RemoveEmptyEntries
+            )
+        );
+
+        const int maxLength = 60;
+
+        if (normalizedMessage.Length <= maxLength)
+            return normalizedMessage;
+
+        var title = normalizedMessage[..(maxLength - 3)];
+
+        var lastSpace = title.LastIndexOf(' ');
+
+        if (lastSpace > 0)
+            title = title[..lastSpace];
+
+        return title.TrimEnd('.', ',', ';', ':', '!', '?') + "...";
+    }
+
+
 }

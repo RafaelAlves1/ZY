@@ -19,4 +19,19 @@ public interface IConversationService
     Task ClearHistoryAsync(
         CancellationToken cancellationToken = default
     );
+
+    Guid? ActiveConversationId { get; }
+
+    Task<IReadOnlyList<Conversation>> GetConversationsAsync(
+        CancellationToken cancellationToken = default
+    );
+
+    Task CreateConversationAsync(
+        CancellationToken cancellationToken = default
+    );
+
+    Task SelectConversationAsync(
+        Guid conversationId,
+        CancellationToken cancellationToken = default
+    );
 }

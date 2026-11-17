@@ -25,6 +25,10 @@ public sealed class ZYDbContext : DbContext
 
             entity.HasKey(conversation => conversation.Id);
 
+            entity.Property(conversation => conversation.Title)
+                .HasMaxLength(100)
+                .IsRequired();
+                
             entity.Property(conversation => conversation.CreatedAt)
                 .IsRequired();
 

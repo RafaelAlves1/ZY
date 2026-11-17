@@ -10,6 +10,10 @@ public interface IConversationRepository
         CancellationToken cancellationToken = default
     );
 
+    Task<IReadOnlyList<Conversation>> GetAllAsync(
+        CancellationToken cancellationToken = default
+    );
+
     Task<Conversation?> GetMostRecentAsync(
         CancellationToken cancellationToken = default
     );
@@ -38,8 +42,11 @@ public interface IConversationRepository
         Conversation conversation,
         CancellationToken cancellationToken = default
     );
+
     Task AddMessagesAsync(
-    IReadOnlyList<ChatMessage> messages,
-    CancellationToken cancellationToken = default
-);
+        IReadOnlyList<ChatMessage> messages,
+        CancellationToken cancellationToken = default,
+        string? conversationTitle = null
+    );
+
 }

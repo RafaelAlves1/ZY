@@ -24,6 +24,34 @@ public class ConversationServiceTests
         return (service, repository);
     }
 
+
+[Fact]
+public async Task SendMessageAsync_ShouldNotUpdateTitleWhenRepositoryFails()
+{
+    // Arrange
+    var aiService = new FakeAiService();
+
+    var (service, repository) =
+        await CreateInitializedService(aiService);
+
+    repository.ShouldFailOnAddMessages = true;
+
+    // Act
+    await Assert.ThrowsAsync<InvalidOperationException>(
+        () => service.SendMessageAsync("Quero criar uma API em C#.")
+    );
+
+    // Assert
+    var conversation = Assert.Single(
+        await repository.GetAllAsync()
+    );
+
+    Assert.Equal("Nova conversa", conversation.Title);
+    Assert.Empty(repository.Messages);
+    Assert.Empty(service.History);
+}
+
+
     [Fact]
     public async Task History_ShouldBeEmpty_WhenServiceIsInitialized()
     {
@@ -229,6 +257,218 @@ public class ConversationServiceTests
         );
     }
 
+
+    [Fact]
+    public async Task CreateConversationAsync_ShouldCreateNewConversationAndClearHistory()
+    {
+        // Arrange
+        var aiService = new FakeAiService();
+
+        var (service, repository) =
+            await CreateInitializedService(aiService);
+
+        await service.SendMessageAsync("Conversa anterior");
+
+        var previousConversationId = service.ActiveConversationId;
+
+        // Act
+        await service.CreateConversationAsync();
+
+        // Assert
+        Assert.NotNull(service.ActiveConversationId);
+        Assert.NotEqual(previousConversationId, service.ActiveConversationId);
+        Assert.Empty(service.History);
+        Assert.Equal(2, repository.Messages.Count);
+        Assert.Equal(2, (await repository.GetAllAsync()).Count);
+    }
+
+    [Fact]
+    public async Task GetConversationsAsync_ShouldReturnAllConversations()
+    {
+        // Arrange
+        var aiService = new FakeAiService();
+
+        var (service, _) =
+            await CreateInitializedService(aiService);
+
+        await service.CreateConversationAsync();
+        await service.CreateConversationAsync();
+
+        // Act
+        var conversations = await service.GetConversationsAsync();
+
+        // Assert
+        Assert.Equal(3, conversations.Count);
+    }
+
+    [Fact]
+    public async Task SelectConversationAsync_ShouldLoadSelectedConversationHistory()
+    {
+        // Arrange
+        var aiService = new FakeAiService();
+
+        var (service, _) =
+            await CreateInitializedService(aiService);
+
+        await service.SendMessageAsync("Mensagem da primeira conversa");
+
+        var firstConversationId = service.ActiveConversationId!.Value;
+
+        await service.CreateConversationAsync();
+
+        await service.SendMessageAsync("Mensagem da segunda conversa");
+
+        // Act
+        await service.SelectConversationAsync(firstConversationId);
+
+        // Assert
+        Assert.Equal(firstConversationId, service.ActiveConversationId);
+        Assert.Equal(2, service.History.Count);
+        Assert.Equal(
+            "Mensagem da primeira conversa",
+            service.History[0].Content
+        );
+    }
+
+    [Fact]
+    public async Task SelectConversationAsync_ShouldNotChangeActiveConversation_WhenIdDoesNotExist()
+    {
+        // Arrange
+        var aiService = new FakeAiService();
+
+        var (service, _) =
+            await CreateInitializedService(aiService);
+
+        await service.SendMessageAsync("Mensagem preservada");
+
+        var activeConversationId = service.ActiveConversationId;
+
+        // Act
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.SelectConversationAsync(Guid.NewGuid())
+        );
+
+        // Assert
+        Assert.Equal(activeConversationId, service.ActiveConversationId);
+        Assert.Equal(2, service.History.Count);
+        Assert.Equal("Mensagem preservada", service.History[0].Content);
+    }
+
+
+    [Fact]
+    public async Task SendMessageAsync_ShouldNotMixMessagesFromDifferentConversations()
+    {
+        // Arrange
+        var aiService = new FakeAiService();
+
+        var (service, _) =
+            await CreateInitializedService(aiService);
+
+        await service.SendMessageAsync("Mensagem da conversa A");
+
+        var conversationAId = service.ActiveConversationId!.Value;
+
+        await service.CreateConversationAsync();
+
+        await service.SendMessageAsync("Mensagem da conversa B");
+
+        // Act
+        await service.SelectConversationAsync(conversationAId);
+
+        await service.SendMessageAsync("Outra mensagem da conversa A");
+
+        // Assert
+        Assert.Equal(3, aiService.LastReceivedHistory.Count);
+
+        Assert.Equal(
+            "Mensagem da conversa A",
+            aiService.LastReceivedHistory[0].Content
+        );
+
+        Assert.Equal(
+            "Outra mensagem da conversa A",
+            aiService.LastReceivedHistory[2].Content
+        );
+
+        Assert.DoesNotContain(
+            aiService.LastReceivedHistory,
+            message => message.Content == "Mensagem da conversa B"
+        );
+    }
+
+
+    [Fact]
+    public async Task SendMessageAsync_ShouldGenerateTitleFromFirstMessage()
+    {
+        // Arrange
+        var aiService = new FakeAiService();
+
+        var (service, repository) =
+            await CreateInitializedService(aiService);
+
+        // Act
+        await service.SendMessageAsync("Quero criar uma API em C#.");
+
+        // Assert
+        var conversation = Assert.Single(
+            await repository.GetAllAsync()
+        );
+
+        Assert.Equal("Quero criar uma API em C#.", conversation.Title);
+    }
+
+    [Fact]
+    public async Task SendMessageAsync_ShouldNotChangeTitleAfterFirstMessage()
+    {
+        // Arrange
+        var aiService = new FakeAiService();
+
+        var (service, repository) =
+            await CreateInitializedService(aiService);
+
+        // Act
+        await service.SendMessageAsync("Primeira mensagem da conversa.");
+
+        var conversation = Assert.Single(
+            await repository.GetAllAsync()
+        );
+
+        var originalTitle = conversation.Title;
+
+        await service.SendMessageAsync("Uma segunda mensagem diferente.");
+
+        // Assert
+        Assert.Equal(originalTitle, conversation.Title);
+    }
+
+
+    [Fact]
+    public async Task SendMessageAsync_ShouldLimitGeneratedTitleTo60Characters()
+    {
+        // Arrange
+        var aiService = new FakeAiService();
+
+        var (service, repository) =
+            await CreateInitializedService(aiService);
+
+        var message =
+            "Quero desenvolver uma aplicação completa para gerenciamento financeiro pessoal utilizando C# e PostgreSQL.";
+
+        // Act
+        await service.SendMessageAsync(message);
+
+        // Assert
+        var conversation = Assert.Single(
+            await repository.GetAllAsync()
+        );
+
+        Assert.True(conversation.Title.Length <= 60);
+        Assert.EndsWith("...", conversation.Title);
+        Assert.False(conversation.Title.EndsWith(" ", StringComparison.Ordinal));
+    }
+
+
+
     private sealed class FakeAiService : IAiService
     {
         public IReadOnlyList<ChatMessage> LastReceivedHistory { get; private set; } = [];
@@ -272,6 +512,16 @@ public class ConversationServiceTests
                 .FirstOrDefault(item => item.Id == conversationId);
 
             return Task.FromResult(conversation);
+        }
+
+        public Task<IReadOnlyList<Conversation>> GetAllAsync(
+    CancellationToken cancellationToken = default)
+        {
+            IReadOnlyList<Conversation> conversations = _conversations
+                .OrderByDescending(conversation => conversation.UpdatedAt)
+                .ToList();
+
+            return Task.FromResult(conversations);
         }
 
         public Task<Conversation?> GetMostRecentAsync(
@@ -323,9 +573,11 @@ public class ConversationServiceTests
             return Task.CompletedTask;
         }
 
+
         public Task AddMessagesAsync(
             IReadOnlyList<ChatMessage> messages,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            string? conversationTitle = null)
         {
             if (ShouldFailOnAddMessages)
             {
@@ -334,24 +586,37 @@ public class ConversationServiceTests
                 );
             }
 
-            foreach (var message in messages)
-            {
-                var conversation = _conversations.FirstOrDefault(
-                    item => item.Id == message.ConversationId
-                );
+            if (messages.Count == 0)
+                return Task.CompletedTask;
 
-                if (conversation is null)
-                {
-                    throw new InvalidOperationException(
-                        "A conversa associada à mensagem não foi encontrada."
-                    );
-                }
+            var conversationId = messages[0].ConversationId;
+
+            if (messages.Any(message => message.ConversationId != conversationId))
+            {
+                throw new InvalidOperationException(
+                    "Todas as mensagens devem pertencer à mesma conversa."
+                );
             }
+
+            var conversation = _conversations.FirstOrDefault(
+                item => item.Id == conversationId
+            );
+
+            if (conversation is null)
+            {
+                throw new InvalidOperationException(
+                    "A conversa associada às mensagens não foi encontrada."
+                );
+            }
+
+            if (!string.IsNullOrWhiteSpace(conversationTitle))
+                conversation.UpdateTitle(conversationTitle);
 
             _messages.AddRange(messages);
 
             return Task.CompletedTask;
         }
+
 
         public Task ClearMessagesAsync(
             Guid conversationId,
