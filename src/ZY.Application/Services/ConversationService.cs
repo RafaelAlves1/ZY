@@ -1,5 +1,4 @@
 
-using ZY.Application.Interfaces;
 using ZY.Core.Interfaces;
 using ZY.Core.Models;
 
@@ -10,20 +9,39 @@ public sealed class ConversationService : IConversationService
     private const int MaxHistoryMessages = 20;
 
     private readonly IAiService _aiService;
+    private readonly IConversationRepository _conversationRepository;
 
+    private Conversation? _activeConversation;
     private readonly List<ChatMessage> _history = [];
 
     public IReadOnlyList<ChatMessage> History => _history.AsReadOnly();
 
-    public ConversationService(IAiService aiService)
+    public ConversationService(
+        IAiService aiService,
+        IConversationRepository conversationRepository)
     {
         _aiService = aiService;
+        _conversationRepository = conversationRepository;
+    }
+
+    public async Task InitializeAsync(
+        CancellationToken cancellationToken = default)
+    {
+        _activeConversation =
+            await _conversationRepository.GetMostRecentAsync(cancellationToken);
+
+        if (_activeConversation is null)
+        {
+            _activeConversation =
+                await _conversationRepository.CreateAsync(cancellationToken);
+        }
+
+        await LoadHistoryAsync(cancellationToken);
     }
 
     public async Task<string> SendMessageAsync(
-        string message,
-        CancellationToken cancellationToken = default
-    )
+    string message,
+    CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(message))
             throw new ArgumentException(
@@ -31,35 +49,76 @@ public sealed class ConversationService : IConversationService
                 nameof(message)
             );
 
-        _history.Add(new ChatMessage("user", message));
+        if (_activeConversation is null)
+            throw new InvalidOperationException(
+                "O serviço de conversas não foi inicializado."
+            );
 
-        try
-        {
-            var historyToSend = _history.ToList();
+        var userMessage = new ChatMessage(
+            _activeConversation.Id,
+            "user",
+            message
+        );
 
-            TrimHistory(historyToSend);
+        var temporaryHistory = _history
+            .Append(userMessage)
+            .ToList();
 
-            var response = await _aiService.GenerateResponseAsync(
-                historyToSend.AsReadOnly(),
+        TrimHistory(temporaryHistory);
+
+        var response = await _aiService.GenerateResponseAsync(
+            temporaryHistory.AsReadOnly(),
+            cancellationToken
+        );
+
+        var assistantMessage = new ChatMessage(
+            _activeConversation.Id,
+            "assistant",
+            response
+        );
+
+        await _conversationRepository.AddMessagesAsync(
+            [userMessage, assistantMessage],
+            cancellationToken
+        );
+
+        _history.Add(userMessage);
+        _history.Add(assistantMessage);
+
+        TrimHistory(_history);
+
+        return response;
+    }
+
+    public async Task ClearHistoryAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (_activeConversation is null)
+            return;
+
+        await _conversationRepository.ClearMessagesAsync(
+            _activeConversation.Id,
+            cancellationToken
+        );
+
+        _history.Clear();
+    }
+
+    private async Task LoadHistoryAsync(
+        CancellationToken cancellationToken)
+    {
+        if (_activeConversation is null)
+            return;
+
+        var messages =
+            await _conversationRepository.GetRecentMessagesAsync(
+                _activeConversation.Id,
+                MaxHistoryMessages,
                 cancellationToken
             );
 
-            _history.Add(new ChatMessage("assistant", response));
-
-            TrimHistory(_history);
-
-            return response;
-        }
-        catch
-        {
-            _history.RemoveAt(_history.Count - 1);
-            throw;
-        }
-    }
-
-    public void ClearHistory()
-    {
         _history.Clear();
+        _history.AddRange(messages);
     }
 
     private static void TrimHistory(List<ChatMessage> history)

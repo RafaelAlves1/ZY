@@ -8,6 +8,7 @@ using System.Windows.Media.Effects;
 using System.Windows.Shapes;
 using ZY.Application.Interfaces;
 using ZY.Core.Enums;
+using ZY.Core.Interfaces;
 using ZY.Desktop.Views;
 using ZY.Infrastructure.AI;
 
@@ -63,10 +64,24 @@ public partial class MainWindow : Window
         _assistantStateService.StateChanged += AssistantStateService_StateChanged;
 
         UpdateVisualState(_assistantStateService.CurrentState);
-        AddMessage(
-    "Olá! Estou pronto para conversar. Como posso ajudar?",
-    false
-);
+
+        if (_conversationService.History.Count > 0)
+        {
+            foreach (var message in _conversationService.History)
+            {
+                AddMessage(
+                    message.Content,
+                    message.Role == "user"
+                );
+            }
+        }
+        else
+        {
+            AddMessage(
+                "Olá! Estou pronto para conversar. Como posso ajudar?",
+                false
+            );
+        }
 
         MessageInput.TextChanged += (_, _) =>
         {
@@ -733,7 +748,8 @@ public partial class MainWindow : Window
     }
 
 
-    private void ClearConversation(object? sender, RoutedEventArgs e)
+
+    private async void ClearConversation(object? sender, RoutedEventArgs e)
     {
         if (_isProcessing)
             return;
@@ -748,15 +764,28 @@ public partial class MainWindow : Window
         if (result != true)
             return;
 
-        _conversationService.ClearHistory();
+        try
+        {
+            await _conversationService.ClearHistoryAsync();
 
-        MessagesPanel.Children.Clear();
+            MessagesPanel.Children.Clear();
 
-        AddMessage(
-            "Olá! Estou pronto para conversar. Como posso ajudar?",
-            false
-        );
+            AddMessage(
+                "Olá! Estou pronto para conversar. Como posso ajudar?",
+                false
+            );
+        }
+        catch (Exception)
+        {
+            MessageBox.Show(
+                "Não foi possível limpar a conversa.",
+                "ZY",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning
+            );
+        }
     }
+
 
 
 }

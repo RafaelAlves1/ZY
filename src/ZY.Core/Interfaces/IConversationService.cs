@@ -1,16 +1,22 @@
 
 using ZY.Core.Models;
 
-namespace ZY.Application.Interfaces;
+namespace ZY.Core.Interfaces;
 
 public interface IConversationService
 {
     IReadOnlyList<ChatMessage> History { get; }
+
+    Task InitializeAsync(
+        CancellationToken cancellationToken = default
+    );
 
     Task<string> SendMessageAsync(
         string message,
         CancellationToken cancellationToken = default
     );
 
-    void ClearHistory();
+    Task ClearHistoryAsync(
+        CancellationToken cancellationToken = default
+    );
 }
